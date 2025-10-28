@@ -334,8 +334,9 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
+  Serial.printf("IP Local: %d\n",  WiFi.localIP().toString());
+
   rebootFailCount = loadRebootCount();
-  Serial.printf("Falhas anteriores: %d\n", rebootFailCount);
 
   loadAllConfigs();
 
@@ -365,7 +366,6 @@ void loop() {
   // Reboot diário (a cada ~24h)
   if (now - dailyRebootTimer >= 86400000UL) {
     Serial.println("Reboot diário agendado...");
-    delay(1000);
     ESP.restart();
   }
 
