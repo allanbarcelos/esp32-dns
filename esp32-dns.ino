@@ -2,7 +2,6 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <WebServer.h>
-#include <EEPROM.h>
 #include <Preferences.h>
 #include "secrets.h"
 #include "crypto.h"
@@ -10,13 +9,13 @@
 // ===================== CONFIGURAÇÃO =====================
 const char* github_api = "https://api.github.com/repos/allanbarcelos/esp32-dns/releases/latest";
 
-// ===================== VARIÁVEIS =====================
+// ===================== VARIÁVEIS GLOBAIS =====================
 WebServer server(80);
 Preferences preferences;
 
 unsigned long checkInterval = 3600000UL;      // 1 hora
 unsigned long dnsUpdateInterval = 300000UL;   // 5 minutos
-unsigned long reconnectDelay = 5000;          // 5 segundos entre tentativas
+unsigned long reconnectDelay = 5000;          // 5 segundos
 const int maxReconnectAttempts = 5;
 const int maxRebootsBeforeWait = 3;
 const unsigned long waitAfterFails = 1800000UL; // 30 minutos
@@ -26,18 +25,15 @@ unsigned long lastCheck = 0;
 unsigned long dnsLastUpdate = 0;
 unsigned long lastReconnectAttempt = 0;
 int reconnectAttempts = 0;
+unsigned long dailyRebootTimer = 0;
 
 enum WifiConnState { WIFI_OK, WIFI_RECONNECTING, WIFI_WAIT };
 WifiConnState wifiState = WIFI_OK;
 unsigned long waitStart = 0;
 
 // ===================== CONFIGURAÇÕES NVS =====================
-String CF_TOKEN;
-String CF_ZONE;
-String CF_RECORD;
-String CF_HOST;
+String CF_TOKEN, CF_ZONE, CF_RECORD, CF_HOST;
 
-// ===================== FUNÇÕES NVS =====================
 void saveConfig(const char* key, const String &value) {
   preferences.begin("config", false);
   preferences.putString(key, value);
@@ -51,6 +47,19 @@ String loadConfig(const char* key, const String &defaultVal = "") {
   return val;
 }
 
+void saveRebootCount(int count) {
+  preferences.begin("system", false);
+  preferences.putInt("rebootFail", count);
+  preferences.end();
+}
+
+int loadRebootCount() {
+  preferences.begin("system", true);
+  int count = preferences.getInt("rebootFail", 0);
+  preferences.end();
+  return count;
+}
+
 void loadAllConfigs() {
   CF_TOKEN  = loadConfig("CF_TOKEN", "");
   CF_ZONE   = loadConfig("CF_ZONE", "");
@@ -58,12 +67,19 @@ void loadAllConfigs() {
   CF_HOST   = loadConfig("CF_HOST", "");
 }
 
-// ===================== CONFIGURAÇÃO WEB =====================
+// ===================== PÁGINA WEB =====================
 void handleRoot() {
-  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>ESP32</title>"
-                "<style>body{display:flex;justify-content:center;align-items:center;height:100vh;"
-                "margin:0;font-family:Arial;}h1{font-size:3em;}</style></head>"
-                "<body><h1>ESP32 Online</h1></body></html>";
+  String html = R"(
+<!DOCTYPE html><html><head><meta charset='UTF-8'><title>ESP32 DNS</title>
+<style>body{font-family:Arial;margin:40px;background:#f4f4f4;}
+.container{max-width:600px;margin:auto;background:white;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,0.1);}
+h1{color:#333;} input[type=text]{width:100%;padding:8px;margin:8px 0;}
+input[type=submit]{background:#007bff;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;}
+</style></head><body>
+<div class='container'><h1>ESP32 DNS + OTA</h1>
+<p><a href='/config'>Configurar Cloudflare</a></p>
+<p>Status: <strong>Online</strong></p>
+</div></body></html>)";
   server.send(200, "text/html", html);
 }
 
@@ -78,20 +94,23 @@ void handleConfigPage() {
     return;
   }
 
-  String tokenVal = CF_TOKEN; tokenVal.replace("\"", "&quot;");
-  String zoneVal = CF_ZONE; zoneVal.replace("\"", "&quot;");
-  String recordVal = CF_RECORD; recordVal.replace("\"", "&quot;");
-  String hostVal = CF_HOST; hostVal.replace("\"", "&quot;");
-
-  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Configuração</title></head><body>";
-  html += "<h1>Configuração Cloudflare</h1>";
-  html += "<form method='POST'>";
-  html += "CF_TOKEN: <input type='text' name='CF_TOKEN' value='" + tokenVal + "'><br>";
-  html += "CF_ZONE: <input type='text' name='CF_ZONE' value='" + zoneVal + "'><br>";
-  html += "CF_RECORD: <input type='text' name='CF_RECORD' value='" + recordVal + "'><br>";
-  html += "CF_HOST: <input type='text' name='CF_HOST' value='" + hostVal + "'><br>";
-  html += "<input type='submit' value='Salvar'>";
-  html += "</form></body></html>";
+  String html = R"(
+<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Config</title>
+<style>body{font-family:Arial;margin:40px;background:#f4f4f4;}
+.container{max-width:600px;margin:auto;background:white;padding:20px;border-radius:10px;}
+input[type=text]{width:100%;padding:8px;margin:8px 0;}
+input[type=submit]{background:#28a745;color:white;padding:10px;border:none;border-radius:5px;}
+</style></head><body>
+<div class='container'>
+<h1>Configuração Cloudflare</h1>
+<form method='POST'>
+<label>CF_TOKEN:</label><input type='text' name='CF_TOKEN' value=')"; html += CF_TOKEN; html += R"('><br>
+<label>CF_ZONE:</label><input type='text' name='CF_ZONE' value=')"; html += CF_ZONE; html += R"('><br>
+<label>CF_RECORD:</label><input type='text' name='CF_RECORD' value=')"; html += CF_RECORD; html += R"('><br>
+<label>CF_HOST:</label><input type='text' name='CF_HOST' value=')"; html += CF_HOST; html += R"('><br>
+<input type='submit' value='Salvar'>
+</form>
+</div></body></html>)";
   server.send(200, "text/html", html);
 }
 
@@ -113,8 +132,7 @@ void handleWiFi() {
       if (WiFi.status() == WL_CONNECTED) {
         Serial.println("WiFi reconectado!");
         rebootFailCount = 0;
-        EEPROM.write(0, rebootFailCount);
-        EEPROM.commit();
+        saveRebootCount(rebootFailCount);
         wifiState = WIFI_OK;
         break;
       }
@@ -128,8 +146,7 @@ void handleWiFi() {
 
         if (reconnectAttempts >= maxReconnectAttempts) {
           rebootFailCount++;
-          EEPROM.write(0, rebootFailCount);
-          EEPROM.commit();
+          saveRebootCount(rebootFailCount);
 
           if (rebootFailCount >= maxRebootsBeforeWait) {
             Serial.println("Muitas falhas, entrando em modo de espera...");
@@ -137,6 +154,7 @@ void handleWiFi() {
             waitStart = millis();
           } else {
             Serial.println("Falha total, reiniciando...");
+            delay(1000);
             ESP.restart();
           }
         }
@@ -147,8 +165,7 @@ void handleWiFi() {
       if (now - waitStart >= waitAfterFails) {
         Serial.println("Tempo de espera finalizado, tentando novamente...");
         rebootFailCount = 0;
-        EEPROM.write(0, rebootFailCount);
-        EEPROM.commit();
+        saveRebootCount(rebootFailCount);
         WiFi.begin(ssid, password);
         wifiState = WIFI_RECONNECTING;
       }
@@ -158,23 +175,31 @@ void handleWiFi() {
 
 // ===================== DNS =====================
 void dnsUpdate(String ip) {
+  if (CF_TOKEN.isEmpty() || CF_ZONE.isEmpty() || CF_RECORD.isEmpty()) {
+    Serial.println("Configuração Cloudflare incompleta.");
+    return;
+  }
+
   String url = "https://api.cloudflare.com/client/v4/zones/" + CF_ZONE + "/dns_records/" + CF_RECORD;
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  http.begin(client, url);
+
+  if (!http.begin(client, url)) return;
+
   http.addHeader("Authorization", "Bearer " + CF_TOKEN);
   http.addHeader("Content-Type", "application/json");
   String payload = "{\"content\":\"" + ip + "\"}";
+
   int code = http.PATCH(payload);
   if (code > 0) {
     String resp = http.getString();
     if (resp.indexOf("\"success\":true") >= 0)
       Serial.println("DNS atualizado com sucesso!");
     else
-      Serial.println("Falha ao atualizar DNS.");
+      Serial.println("Falha ao atualizar DNS: " + resp);
   } else {
-    Serial.println("Erro ao atualizar DNS. Código: " + String(code));
+    Serial.println("Erro HTTP: " + String(code));
   }
   http.end();
 }
@@ -182,35 +207,31 @@ void dnsUpdate(String ip) {
 String getPublicIP() {
   WiFiClient client;
   HTTPClient http;
-  http.begin(client, "http://api.ipify.org");
-  int httpCode = http.GET();
-  String ip = "";
-  if (httpCode == HTTP_CODE_OK) {
-    ip = http.getString();
-    ip.trim();
-  }
+  if (!http.begin(client, "http://api.ipify.org")) return "";
+  int code = http.GET();
+  String ip = (code == HTTP_CODE_OK) ? http.getString() : "";
+  ip.trim();
   http.end();
   return ip;
 }
 
 String getDNSHostIP(String host) {
-  IPAddress resolvedIP;
-  if (WiFi.hostByName(host.c_str(), resolvedIP)) return resolvedIP.toString();
-  return "";
+  IPAddress ip;
+  return WiFi.hostByName(host.c_str(), ip) ? ip.toString() : "";
 }
 
 void handleDNSUpdate() {
   String publicIP = getPublicIP();
-  if (publicIP == "") return;
+  if (publicIP.isEmpty()) return;
 
   String currentDNSIP = getDNSHostIP(CF_HOST);
-  if (currentDNSIP == "") return;
+  if (currentDNSIP.isEmpty()) return;
 
   if (currentDNSIP != publicIP) {
-    Serial.println("Atualizando DNS...");
+    Serial.println("Atualizando DNS: " + publicIP);
     dnsUpdate(publicIP);
   } else {
-    Serial.println("DNS já está atualizado.");
+    Serial.println("DNS já atualizado.");
   }
 }
 
@@ -221,11 +242,16 @@ void checkForUpdate() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  http.begin(client, github_api);
+
+  if (!http.begin(client, github_api)) {
+    Serial.println("Falha ao iniciar HTTP");
+    return;
+  }
+
   http.addHeader("User-Agent", "ESP32");
-  int httpCode = http.GET();
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("Falha ao acessar GitHub API. Código: %d\n", httpCode);
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("GitHub API erro: %d\n", code);
     http.end();
     return;
   }
@@ -233,69 +259,84 @@ void checkForUpdate() {
   String payload = http.getString();
   http.end();
 
-  int idxVersion = payload.indexOf("\"tag_name\"");
-  if (idxVersion < 0) return;
+  int idx = payload.indexOf("\"tag_name\"");
+  if (idx < 0) return;
 
-  int startVer = payload.indexOf("\"", idxVersion + 10) + 1;
-  int endVer = payload.indexOf("\"", startVer);
-  String latestVersion = payload.substring(startVer, endVer);
+  int start = payload.indexOf("\"", idx + 11) + 1;
+  int end = payload.indexOf("\"", start);
+  String latest = payload.substring(start, end);
 
-  if (latestVersion == firmware_version) {
-    Serial.println("Firmware já está atualizado.");
+  if (latest == firmware_version) {
+    Serial.println("Firmware atualizado.");
     return;
   }
 
-  int idx = payload.indexOf("\"browser_download_url\"");
+  idx = payload.indexOf("\"browser_download_url\"");
   if (idx < 0) return;
-  int start = payload.indexOf("https://", idx);
-  int end = payload.indexOf("\"", start);
-  String binUrl = payload.substring(start, end);
 
-  Serial.println("Nova versão disponível: " + binUrl);
+  start = payload.indexOf("https://", idx);
+  end = payload.indexOf("\"", start);
+  String url = payload.substring(start, end);
+
+  Serial.println("Baixando: " + latest);
 
   WiFiClientSecure binClient;
   binClient.setInsecure();
   HTTPClient binHttp;
-  binHttp.begin(binClient, binUrl);
-  int binCode = binHttp.GET();
+  if (!binHttp.begin(binClient, url)) return;
 
-  if (binCode == HTTP_CODE_OK) {
-    int contentLength = binHttp.getSize();
-    if (Update.begin(contentLength)) {
-      WiFiClient *stream = binHttp.getStreamPtr();
-      uint8_t buf[1024];
-      int bytesRead = 0;
-      while (bytesRead < contentLength) {
-        size_t toRead = min(sizeof(buf), (size_t)(contentLength - bytesRead));
-        int c = stream->readBytes(buf, toRead);
-        if (c <= 0) break;
-        decryptBuffer(buf, c);
-        Update.write(buf, c);
-        bytesRead += c;
-        yield();
-      }
-      if (Update.end()) {
-        Serial.println("Atualização concluída!");
-        ESP.restart();
-      } else {
-        Serial.printf("Erro na atualização: %s\n", Update.getErrorString());
-      }
-    }
-  } else {
-    Serial.printf("Falha ao baixar binário. Código: %d\n", binCode);
+  code = binHttp.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("Download falhou: %d\n", code);
+    binHttp.end();
+    return;
   }
+
+  int len = binHttp.getSize();
+  if (len <= 0 || !Update.begin(len)) {
+    Serial.println("Espaço insuficiente ou tamanho inválido");
+    binHttp.end();
+    return;
+  }
+
+  WiFiClient* stream = binHttp.getStreamPtr();
+  uint8_t buf[1024];
+  size_t written = 0;
+
+  while (written < len && binHttp.connected()) {
+    size_t avail = stream->available();
+    if (!avail) { delay(1); continue; }
+    size_t read = stream->readBytes(buf, min(sizeof(buf), (size_t)(len - written)));
+    if (read <= 0) break;
+
+    decryptBuffer(buf, read);
+    size_t w = Update.write(buf, read);
+    if (w != read) {
+      Serial.println("Erro ao gravar update");
+      break;
+    }
+    written += w;
+  }
+
   binHttp.end();
+
+  if (written == len && Update.end(true)) {
+    Serial.println("OTA concluído! Reiniciando...");
+    ESP.restart();
+  } else {
+    Serial.printf("OTA falhou: %s\n", Update.getErrorString().c_str());
+  }
 }
 
-// ===================== SETUP =====================
+// ===================== SETUP & LOOP =====================
 void setup() {
   Serial.begin(115200);
-  EEPROM.begin(512);
+  delay(100);
 
-  rebootFailCount = EEPROM.read(0);
+  rebootFailCount = loadRebootCount();
   Serial.printf("Falhas anteriores: %d\n", rebootFailCount);
 
-  loadAllConfigs();  // carrega CF_TOKEN, CF_ZONE, CF_RECORD, CF_HOST
+  loadAllConfigs();
 
   if (rebootFailCount >= maxRebootsBeforeWait) {
     wifiState = WIFI_WAIT;
@@ -309,18 +350,21 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/config", handleConfigPage);
   server.begin();
-  Serial.println("Servidor HTTP iniciado!");
+
+  dailyRebootTimer = millis();
+  Serial.println("Sistema iniciado.");
 }
 
-// ===================== LOOP =====================
 void loop() {
   server.handleClient();
   handleWiFi();
 
   unsigned long now = millis();
 
-  // Reboot diário
-  if (now > 86400000UL) {
+  // Reboot diário (a cada ~24h)
+  if (now - dailyRebootTimer >= 86400000UL) {
+    Serial.println("Reboot diário agendado...");
+    delay(1000);
     ESP.restart();
   }
 
