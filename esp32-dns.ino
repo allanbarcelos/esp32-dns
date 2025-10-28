@@ -324,7 +324,7 @@ void checkForUpdate() {
     Serial.println("OTA concluído! Reiniciando...");
     ESP.restart();
   } else {
-    Serial.printf("OTA falhou: %s\n", Update.getErrorString().c_str());
+    Serial.printf("OTA falhou: %s\n", Update.errorString().c_str());
   }
 }
 
