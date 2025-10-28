@@ -334,8 +334,6 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  Serial.printf("IP Local: %d\n",  WiFi.localIP().toString());
-
   rebootFailCount = loadRebootCount();
 
   loadAllConfigs();
@@ -348,6 +346,8 @@ void setup() {
     WiFi.begin(ssid, password);
     wifiState = WIFI_RECONNECTING;
   }
+
+  Serial.printf("IP Local: %d\n",  WiFi.localIP().toString());
 
   server.on("/", handleRoot);
   server.on("/config", handleConfigPage);
