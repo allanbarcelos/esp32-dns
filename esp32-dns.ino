@@ -360,6 +360,7 @@ void setup() {
 void loop() {
   server.handleClient();
   handleWiFi();
+  Serial.printf("IP Local: %d\n",  WiFi.localIP().toString());
 
   unsigned long now = millis();
 
