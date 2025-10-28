@@ -347,7 +347,7 @@ void setup() {
     wifiState = WIFI_RECONNECTING;
   }
 
-  Serial.printf("IP Local: %d\n",  WiFi.localIP().toString());
+  Serial.printf("IP Local: %s\n",  WiFi.localIP().toString());
 
   server.on("/", handleRoot);
   server.on("/config", handleConfigPage);
@@ -360,7 +360,7 @@ void setup() {
 void loop() {
   server.handleClient();
   handleWiFi();
-  Serial.printf("IP Local: %d\n",  WiFi.localIP().toString());
+  Serial.printf("IP Local: %s\n",  WiFi.localIP().toString());
 
   unsigned long now = millis();
 
