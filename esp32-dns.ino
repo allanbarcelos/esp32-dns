@@ -335,19 +335,31 @@ void setup() {
   delay(100);
 
   rebootFailCount = loadRebootCount();
-
   loadAllConfigs();
 
-  if (rebootFailCount >= maxRebootsBeforeWait) {
-    wifiState = WIFI_WAIT;
-    waitStart = millis();
-  } else {
-    WiFi.setHostname("ESP32_DNS");
-    WiFi.begin(ssid, password);
-    wifiState = WIFI_RECONNECTING;
+  Serial.println("Inicializando WiFi...");
+  WiFi.setHostname("ESP32_DNS");
+  WiFi.begin(ssid, password);
+
+  // Aguarda conexão antes de prosseguir
+  int tentativas = 0;
+  while (WiFi.status() != WL_CONNECTED && tentativas < 20) {
+    delay(500);
+    Serial.print(".");
+    tentativas++;
   }
 
-  Serial.printf("IP Local: %s\n",  WiFi.localIP().toString());
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi conectado!");
+    Serial.print("SSID: "); Serial.println(WiFi.SSID());
+    Serial.print("IP Local: "); Serial.println(WiFi.localIP());
+    wifiState = WIFI_OK;
+    rebootFailCount = 0;
+    saveRebootCount(rebootFailCount);
+  } else {
+    Serial.println("\nFalha ao conectar no WiFi inicial. Entrando em modo de reconexão...");
+    wifiState = WIFI_RECONNECTING;
+  }
 
   server.on("/", handleRoot);
   server.on("/config", handleConfigPage);
@@ -356,6 +368,7 @@ void setup() {
   dailyRebootTimer = millis();
   Serial.println("Sistema iniciado.");
 }
+
 
 void loop() {
   server.handleClient();
