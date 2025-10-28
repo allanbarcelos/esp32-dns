@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Update.h>
 #include <WebServer.h>
