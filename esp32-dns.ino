@@ -74,6 +74,8 @@ void loop() {
   delay(200);
   digitalWrite(LED_PIN, LOW);
   delay(200);
+    Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
+
 }
 
 void checkForUpdate() {
