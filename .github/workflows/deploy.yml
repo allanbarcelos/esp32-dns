@@ -52,18 +52,34 @@ jobs:
           echo '#endif' >> secrets.h
 
       - name: Compile firmware (ESP32 Generic)
+        id: build
         run: |
+          set -e  # interrompe se qualquer comando falhar
+          mkdir -p build
+          echo "Compilando firmware para ESP32..."
+
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
+            --output-dir build \
             --build-property build.flags.optimize.lto=true \
             --build-property build.flags.optimize.size=true \
-            --output-dir build
+            --warnings all \
+            --verbose
 
-      - name: Find generated firmware bin
-        id: firmware
+          echo "Compilação concluída."
+          ls -lh build
+
+      - name: Rename and Export firmware
         run: |
-          BIN=$(find build -name "*.bin" | head -n1)
-          echo "FIRMWARE_BIN=$BIN" >> $GITHUB_ENV
+          set -e
+          BIN_FILE=$(find build -maxdepth 1 -name "*.bin" -print -quit)
+          if [ -z "$BIN_FILE" ]; then
+            echo "Nenhum arquivo .bin encontrado!"
+            exit 1
+          fi
+          mv "$BIN_FILE" build/firmware.bin
+          echo "FIRMWARE_BIN=build/firmware.bin" >> $GITHUB_ENV
+          echo "Arquivo final: build/firmware.bin"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -78,5 +94,3 @@ jobs:
           name: ESP32 Firmware Build ${{ github.run_number }}
           files: ${{ env.FIRMWARE_BIN }}
           generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GHR_TOKEN }}
