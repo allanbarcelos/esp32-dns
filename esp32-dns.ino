@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+#include <WebServer.h>
 #include "secrets.h"
 
 // URL da última release
@@ -11,6 +12,9 @@ const char* github_api = "https://api.github.com/repos/allanbarcelos/esp32-dns/r
 // Intervalo para checar atualizações (10 minutos)
 const unsigned long checkInterval = 10 * 60 * 1000;
 unsigned long lastCheck = 0;
+
+//
+WebServer server(80);
 
 void setup() {
   Serial.begin(115200);
@@ -26,6 +30,10 @@ void setup() {
 
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
+
+  // Configura as rotas do servidor web
+  server.on("/", handleRoot);
+  server.begin();
 
   checkForUpdate();
   lastCheck = millis();
@@ -115,4 +123,43 @@ void checkForUpdate() {
   }
 
   binHttp.end();
+}
+
+void handleRoot() {
+  String publicIP = getPublicIP();
+
+  String html = "<html><head><title>ESP32 OTA</title>"
+                "<style>"
+                "body{font-family:sans-serif;background:#f2f2f2;text-align:center;margin-top:50px;}"
+                "button{padding:10px 20px;font-size:16px;background:#007bff;color:white;border:none;border-radius:5px;cursor:pointer;}"
+                "button:hover{background:#0056b3;}"
+                "</style></head><body>"
+                "<h1>ESP32 OTA Updater</h1>"
+                "<p><b>Versão atual:</b> " + String(firmware_version) + "</p>"
+                "<p><b>WiFi:</b> " + WiFi.SSID() + "</p>"
+                "<p><b>Local IP:</b> " + WiFi.localIP().toString() + "</p>"
+                "<p><b>Public IP:</b> " + publicIP + "</p>"
+                "</body></html>";
+
+  server.send(200, "text/html", html);
+}
+
+String getPublicIP() {
+  WiFiClient client;
+  HTTPClient http;
+  http.begin(client, "http://api.ipify.org");
+  int httpCode = http.GET();
+  String ip = "";
+  if (httpCode == HTTP_CODE_OK) {
+    ip = http.getString();
+    ip.trim();
+  }
+  http.end();
+  return ip;
+}
+
+String getDNSHostIP(String host) {
+  IPAddress resolvedIP;
+  if (WiFi.hostByName(host.c_str(), resolvedIP)) return resolvedIP.toString();
+  return "";
 }
