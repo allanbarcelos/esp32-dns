@@ -38,17 +38,6 @@ jobs:
           arduino-cli lib install "ArduinoJson@7.2.0"
           arduino-cli lib install "ArduinoWebsockets@0.5.4"
 
-      - name: Get highest tag and increment
-        id: version
-        run: |
-          all_tags=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${GITHUB_REPOSITORY}/tags?per_page=100 | jq -r '.[].name')
-          echo "$all_tags"
-          last_tag=$(echo "$all_tags" | grep -E '^v[0-9]+$' | sed 's/v//' | sort -nr | head -1)
-          new_version=$((last_tag + 1))
-          new_tag="v${new_version}"
-          echo "new_tag=$new_tag" >> $GITHUB_ENV
-
       - name: Generate secrets.h
         run: |
           echo '#ifndef SECRETS_H' > secrets.h
@@ -56,16 +45,9 @@ jobs:
           echo '' >> secrets.h
           echo 'const char* ssid = "${{ secrets.WIFI_SSID }}";' >> secrets.h
           echo 'const char* password = "${{ secrets.WIFI_PASS }}";' >> secrets.h
-          echo "const char* firmware_version = \"$new_tag\";" >> secrets.h
+          echo "const char* firmware_version = \"v${{ github.run_number }}\";" >> secrets.h
           echo '' >> secrets.h
           echo '#endif' >> secrets.h
-
-      - name: Get crypto.h
-        run: |
-          echo "${{ secrets.CRYPTO_H }}" | base64 --decode > crypto.h
-
-      - name: List available ESP32 boards
-        run: arduino-cli board listall esp32
 
       - name: Compile firmware (ESP32 Generic)
         run: |
@@ -75,27 +57,24 @@ jobs:
             --build-property build.flags.optimize.size=true \
             --output-dir build
 
-      - name: Encrypt firmware
+      - name: Find generated firmware bin
+        id: firmware
         run: |
-          BIN_FILE=$(ls build/*.bin)
-          ENCRYPTED_BIN="build/firmware_encrypted.bin"
-          echo "${{ secrets.ENCRYPT_SCRIPT }}" | base64 --decode > encrypt_firmware.py
-          chmod +x encrypt_firmware.py
-          python3 encrypt_firmware.py "$BIN_FILE" "$ENCRYPTED_BIN" "${{ secrets.ENCRYPT_TOKEN }}"
-          mv "$ENCRYPTED_BIN" build/firmware.bin
+          BIN=$(find build -name "*.bin" | head -n1)
+          echo "FIRMWARE_BIN=$BIN" >> $GITHUB_ENV
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware-bin
-          path: build/firmware.bin
+          path: ${{ env.FIRMWARE_BIN }}
 
       - name: Create GitHub Release and upload firmware
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: ESP32 Firmware Build ${{ github.run_number }}
-          files: build/firmware.bin
+          files: ${{ env.FIRMWARE_BIN }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GHR_TOKEN }}
