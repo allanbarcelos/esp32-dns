@@ -92,7 +92,7 @@ void checkForUpdate() {
   http.end();
 
   // Parse do JSON
-  DynamicJsonDocument doc(16384); // tamanho maior para payload GitHub
+  DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
     Serial.printf("Erro ao parsear JSON: %s\n", error.c_str());
@@ -115,7 +115,6 @@ void checkForUpdate() {
   Serial.printf("Nova release encontrada: %s\n", latestVersion.c_str());
   Serial.printf("Baixando binário de: %s\n", binUrl.c_str());
 
-  // OTA segura
   const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
   if (!update_partition) {
     Serial.println("Erro ao obter partição OTA de destino.");
@@ -124,7 +123,19 @@ void checkForUpdate() {
 
   HTTPClient binHttp;
   binHttp.begin(client, binUrl);
+  binHttp.addHeader("User-Agent", "ESP32");
+
   int binCode = binHttp.GET();
+
+  // Se retornar 302 (redirect), segue automaticamente
+  if (binCode == HTTP_CODE_MOVED_PERMANENTLY || binCode == HTTP_CODE_FOUND) {
+    String redirectUrl = binHttp.getLocation();
+    Serial.printf("Redirecionamento detectado. Seguindo para: %s\n", redirectUrl.c_str());
+    binHttp.end();
+    binHttp.begin(client, redirectUrl);
+    binHttp.addHeader("User-Agent", "ESP32");
+    binCode = binHttp.GET();
+  }
 
   if (binCode != HTTP_CODE_OK) {
     Serial.printf("Falha ao baixar binário. Código: %d\n", binCode);
@@ -149,10 +160,9 @@ void checkForUpdate() {
   }
 
   size_t written = Update.writeStream(*stream);
-  if (Update.end(true)) { // true = reinicia automaticamente
+  if (Update.end(true)) {
     if (Update.isFinished()) {
       Serial.println("Atualização OTA concluída com sucesso!");
-      // firmware_version será atualizado no próximo boot
     } else {
       Serial.println("Update não finalizado corretamente.");
     }
@@ -162,6 +172,7 @@ void checkForUpdate() {
 
   binHttp.end();
 }
+
 
 void handleRoot() {
   String publicIP = getPublicIP();
