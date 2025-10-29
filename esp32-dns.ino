@@ -19,9 +19,6 @@ const char* firmware_version = "v1.0.0";
 // Servidor web
 WebServer server(80);
 
-// LED interno para teste
-#define LED_PIN 2
-
 void setup() {
   // Serial confiável desde o boot
   Serial.begin(115200);
@@ -69,12 +66,8 @@ void loop() {
     lastCheck = millis();
   }
 
-  // Pisca LED para debug
-  digitalWrite(LED_PIN, HIGH);
   delay(200);
-  digitalWrite(LED_PIN, LOW);
-  delay(200);
-    Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
 
 }
 
