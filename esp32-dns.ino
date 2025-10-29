@@ -13,9 +13,6 @@ const char* github_api = "https://api.github.com/repos/allanbarcelos/esp32-dns/r
 const unsigned long checkInterval = 10 * 60 * 1000; // 10 minutos
 unsigned long lastCheck = 0;
 
-// Firmware atual
-const char* firmware_version = "v1.0.0";
-
 // Servidor web
 WebServer server(80);
 
@@ -26,8 +23,6 @@ void setup() {
   delay(500);
 
   Serial.println("=== Inicializando ESP32 OTA com rollback ===");
-
-  pinMode(LED_PIN, OUTPUT);
 
   // Checa se firmware atual é novo e marca como válido
   const esp_partition_t* running = esp_ota_get_running_partition();
