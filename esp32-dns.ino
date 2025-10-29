@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h> 
 #include <HTTPClient.h>
 #include <Update.h>
 #include <ArduinoJson.h>
@@ -98,7 +99,7 @@ void checkForUpdate() {
           if (Update.end(true)) { // true = reinicia automaticamente
             Serial.println("Atualização concluída com sucesso!");
           } else {
-            Serial.printf("Erro na atualização: %s\n", Update.getErrorString().c_str());
+            Serial.printf("Erro na atualização: %s\n", Update.errorString());
           }
         } else {
           Serial.println("Erro ao escrever dados OTA.");
