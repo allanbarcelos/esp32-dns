@@ -8,23 +8,31 @@
 #include "esp_partition.h"
 #include "secrets.h"
 
-// URL da última release
+// Configurações OTA
 const char* github_api = "https://api.github.com/repos/allanbarcelos/esp32-dns/releases/latest";
-
-// Intervalo para checar atualizações (10 minutos)
-const unsigned long checkInterval = 10 * 60 * 1000;
+const unsigned long checkInterval = 10 * 60 * 1000; // 10 minutos
 unsigned long lastCheck = 0;
+
+// Firmware atual
+const char* firmware_version = "v1.0.0";
 
 // Servidor web
 WebServer server(80);
 
+// LED interno para teste
+#define LED_PIN 2
+
 void setup() {
+  // Serial confiável desde o boot
   Serial.begin(115200);
-  delay(1000);
+  while (!Serial) { delay(10); }
+  delay(500);
 
   Serial.println("=== Inicializando ESP32 OTA com rollback ===");
 
-  // Confirma firmware atual se o boot foi bem-sucedido
+  pinMode(LED_PIN, OUTPUT);
+
+  // Checa se firmware atual é novo e marca como válido
   const esp_partition_t* running = esp_ota_get_running_partition();
   esp_ota_img_states_t otaState;
   if (esp_ota_get_state_partition(running, &otaState) == ESP_OK) {
@@ -34,41 +42,50 @@ void setup() {
     }
   }
 
+  // Conecta ao WiFi
   Serial.println("Conectando ao WiFi...");
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nConectado ao WiFi!");
-  Serial.print("IP: ");
-  Serial.println(WiFi.localIP());
+  Serial.println("\nWiFi conectado!");
+  Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
 
   // Rotas web
   server.on("/", handleRoot);
   server.begin();
 
-  // Checa por atualização inicial
+  // Checa atualização inicial
   checkForUpdate();
   lastCheck = millis();
 }
 
 void loop() {
   server.handleClient();
+
   if (millis() - lastCheck > checkInterval) {
     checkForUpdate();
     lastCheck = millis();
   }
+
+  // Pisca LED para debug
+  digitalWrite(LED_PIN, HIGH);
+  delay(200);
+  digitalWrite(LED_PIN, LOW);
+  delay(200);
 }
 
 void checkForUpdate() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi não conectado.");
+    Serial.println("WiFi não conectado. Abortando OTA.");
     return;
   }
 
+  Serial.println("Checando GitHub API para atualização...");
+
   WiFiClientSecure client;
-  client.setInsecure();
+  client.setInsecure(); // Ignora SSL
   HTTPClient http;
 
   http.begin(client, github_api);
@@ -76,7 +93,7 @@ void checkForUpdate() {
   int httpCode = http.GET();
 
   if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("Falha ao acessar GitHub API. Código: %d\n", httpCode);
+    Serial.printf("Falha ao acessar API GitHub. Código: %d\n", httpCode);
     http.end();
     return;
   }
@@ -85,10 +102,10 @@ void checkForUpdate() {
   http.end();
 
   // Parse do JSON
-  DynamicJsonDocument doc(8192);
+  DynamicJsonDocument doc(16384); // tamanho maior para payload GitHub
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
-    Serial.println("Erro ao parsear JSON da API.");
+    Serial.printf("Erro ao parsear JSON: %s\n", error.c_str());
     return;
   }
 
@@ -105,55 +122,52 @@ void checkForUpdate() {
   }
 
   String binUrl = assets[0]["browser_download_url"];
-  Serial.println("Nova release encontrada: " + latestVersion);
-  Serial.println("Baixando de: " + binUrl);
+  Serial.printf("Nova release encontrada: %s\n", latestVersion.c_str());
+  Serial.printf("Baixando binário de: %s\n", binUrl.c_str());
 
-  // Baixa e aplica atualização OTA
+  // OTA segura
+  const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
+  if (!update_partition) {
+    Serial.println("Erro ao obter partição OTA de destino.");
+    return;
+  }
+
   HTTPClient binHttp;
   binHttp.begin(client, binUrl);
   int binCode = binHttp.GET();
 
-  if (binCode == HTTP_CODE_OK) {
-    int contentLength = binHttp.getSize();
-    WiFiClient* stream = binHttp.getStreamPtr();
+  if (binCode != HTTP_CODE_OK) {
+    Serial.printf("Falha ao baixar binário. Código: %d\n", binCode);
+    binHttp.end();
+    return;
+  }
 
-    if (contentLength > 0) {
-      Serial.printf("Tamanho do firmware: %d bytes\n", contentLength);
+  int contentLength = binHttp.getSize();
+  WiFiClient* stream = binHttp.getStreamPtr();
 
-      if (Update.begin(contentLength)) {
-        size_t written = Update.writeStream(*stream);
-        if (written == contentLength) {
-          Serial.println("Gravação concluída. Finalizando...");
-          if (Update.end()) {
-            if (Update.isFinished()) {
-              Serial.println("Atualização gravada com sucesso.");
+  if (contentLength <= 0) {
+    Serial.println("Conteúdo do binário vazio. Abortando OTA.");
+    binHttp.end();
+    return;
+  }
 
-              // Define nova partição de boot
-              const esp_partition_t* newPartition = esp_ota_get_next_update_partition(NULL);
-              esp_err_t err = esp_ota_set_boot_partition(newPartition);
-              if (err == ESP_OK) {
-                Serial.println("Partição OTA configurada. Reiniciando...");
-                ESP.restart();
-              } else {
-                Serial.printf("Erro ao definir partição de boot: %s\n", esp_err_to_name(err));
-              }
-            } else {
-              Serial.println("Update não finalizado corretamente.");
-            }
-          } else {
-            Serial.printf("Erro na atualização: %s\n", Update.errorString());
-          }
-        } else {
-          Serial.printf("Erro ao gravar firmware (%d/%d bytes).\n", written, contentLength);
-        }
-      } else {
-        Serial.println("Falha ao iniciar Update OTA.");
-      }
+  Serial.printf("Iniciando OTA. Tamanho do binário: %d bytes\n", contentLength);
+  if (!Update.begin(contentLength, U_FLASH, update_partition->address)) {
+    Serial.printf("Falha ao iniciar OTA: %s\n", Update.errorString());
+    binHttp.end();
+    return;
+  }
+
+  size_t written = Update.writeStream(*stream);
+  if (Update.end(true)) { // true = reinicia automaticamente
+    if (Update.isFinished()) {
+      Serial.println("Atualização OTA concluída com sucesso!");
+      // firmware_version será atualizado no próximo boot
     } else {
-      Serial.println("Conteúdo do binário vazio.");
+      Serial.println("Update não finalizado corretamente.");
     }
   } else {
-    Serial.printf("Falha ao baixar binário. Código: %d\n", binCode);
+    Serial.printf("Erro OTA: %s\n", Update.errorString());
   }
 
   binHttp.end();
@@ -165,11 +179,9 @@ void handleRoot() {
   String html = "<html><head><title>ESP32 OTA</title>"
                 "<style>"
                 "body{font-family:sans-serif;background:#f2f2f2;text-align:center;margin-top:50px;}"
-                "button{padding:10px 20px;font-size:16px;background:#007bff;color:white;border:none;border-radius:5px;cursor:pointer;}"
-                "button:hover{background:#0056b3;}"
                 "</style></head><body>"
                 "<h1>ESP32 OTA</h1>"
-                "<p><b>Versão atual:</b> " + String(firmware_version) + "</p>"
+                "<p><b>Firmware:</b> " + String(firmware_version) + "</p>"
                 "<p><b>WiFi:</b> " + WiFi.SSID() + "</p>"
                 "<p><b>Local IP:</b> " + WiFi.localIP().toString() + "</p>"
                 "<p><b>Public IP:</b> " + publicIP + "</p>"
@@ -190,11 +202,4 @@ String getPublicIP() {
   }
   http.end();
   return ip;
-}
-
-String getDNSHostIP(String host) {
-  IPAddress resolvedIP;
-  if (WiFi.hostByName(host.c_str(), resolvedIP))
-    return resolvedIP.toString();
-  return "";
 }
