@@ -134,7 +134,7 @@ void handleRoot() {
                 "button{padding:10px 20px;font-size:16px;background:#007bff;color:white;border:none;border-radius:5px;cursor:pointer;}"
                 "button:hover{background:#0056b3;}"
                 "</style></head><body>"
-                "<h1>ESP32 OTA Updater</h1>"
+                "<h1>ESP32</h1>"
                 "<p><b>Versão atual:</b> " + String(firmware_version) + "</p>"
                 "<p><b>WiFi:</b> " + WiFi.SSID() + "</p>"
                 "<p><b>Local IP:</b> " + WiFi.localIP().toString() + "</p>"
