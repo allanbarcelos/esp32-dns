@@ -17,6 +17,7 @@ struct Config {
   char cf_token[64];
   char cf_zone[32];
   char cf_record[32];
+  char cf_host[64];
 };
 
 Config config;
@@ -52,6 +53,11 @@ unsigned long waitStart = 0;
 // ----------------------------
 unsigned long lastIpPrint = 0;
 const unsigned long ipPrintInterval = 60000UL; // 1 minute (60.000 ms)
+
+String CF_TOKEN = "";
+String CF_ZONE = "";
+String CF_RECORD = "";
+String CF_HOST = "";
 
 // ----------------------------
 // WEB SERVER
@@ -162,7 +168,7 @@ void checkForUpdate() {
   String payload = http.getString();
   http.end();
 
-  DynamicJsonDocument doc(16384);
+  JsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
     Serial.printf("JSON parse error: %s\n", error.c_str());
@@ -276,6 +282,7 @@ void handleRoot() {
                 "Cloudflare Token: <input name='cf_token' value='" + String(CF_TOKEN) + "'><br>"
                 "Zone ID: <input name='cf_zone' value='" + String(CF_ZONE) + "'><br>"
                 "Record ID: <input name='cf_record' value='" + String(CF_RECORD) + "'><br>"
+                "HOST: <input name='cf_host' value='" + String(CF_HOST) + "'><br>"
                 "<button type='submit'>Save</button>"
                 "</body></html>";
 
@@ -304,14 +311,16 @@ void loadConfig() {
   EEPROM.begin(sizeof(Config));
   EEPROM.get(0, config);
   CF_TOKEN = String(config.cf_token);
-  CF_ZONE = String(config.cf_zone);
+  CF_ZONE  = String(config.cf_zone);
   CF_RECORD = String(config.cf_record);
+  CF_HOST = String(config.cf_host);
 }
 
 void saveConfig() {
   strncpy(config.cf_token, CF_TOKEN.c_str(), sizeof(config.cf_token));
   strncpy(config.cf_zone, CF_ZONE.c_str(), sizeof(config.cf_zone));
   strncpy(config.cf_record, CF_RECORD.c_str(), sizeof(config.cf_record));
+  strncpy(config.cf_host, CF_HOST.c_str(), sizeof(config.cf_host));
 
   EEPROM.begin(sizeof(Config));
   EEPROM.put(0, config);
