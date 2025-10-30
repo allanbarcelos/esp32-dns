@@ -108,7 +108,7 @@ void setup() {
     Serial.println("Failed to initialize LittleFS. Web interface will not work.");
     // Continue without LittleFS - basic functionality will still work
   }
-
+  
   // Setup web server routes
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save", handleSaveConfig);
@@ -150,6 +150,7 @@ void loop() {
   // Print local IP periodically
   if (now - lastIpPrint >= ipPrintInterval) {
     Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
+    listFiles();
     lastIpPrint = now;
   }
 }
@@ -286,10 +287,6 @@ void checkForUpdate() {
 // ----------------------------
 
 void handleRoot() {
-  if (!LittleFS.begin()) {
-    server.send(500, "text/plain", "LittleFS mount failed");
-    return;
-  }
 
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
@@ -504,4 +501,14 @@ bool initLittleFS() {
   }
   Serial.println("LittleFS mounted successfully.");
   return true;
+}
+
+void listFiles() {
+  Serial.println("Listing LittleFS files:");
+  File root = LittleFS.open("/");
+  File file = root.openNextFile();
+  while(file){
+    Serial.println(file.name());
+    file = root.openNextFile();
+  }
 }
