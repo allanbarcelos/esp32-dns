@@ -253,11 +253,16 @@ void checkForUpdate() {
   }
 
   if (Update.end(true)) {
-    if (Update.isFinished()) Serial.println("OTA update completed successfully!");
-    else Serial.println("OTA did not finish correctly.");
+    if (Update.isFinished()) {
+        Serial.println("OTA update completed successfully! Rebooting...");
+        ESP.restart(); 
+    } else {
+        Serial.println("OTA did not finish correctly.");
+    }
   } else {
-    Serial.printf("OTA end error: %s\n", Update.errorString());
+      Serial.printf("OTA end error: %s\n", Update.errorString());
   }
+
 
   http.end();
 }
