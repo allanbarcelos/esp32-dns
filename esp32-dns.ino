@@ -150,7 +150,8 @@ void loop() {
   // Print local IP periodically
   if (now - lastIpPrint >= ipPrintInterval) {
     Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
-    listFiles();
+    // listFiles();
+    printPartitionUsage();
     lastIpPrint = now;
   }
 }
@@ -511,4 +512,45 @@ void listFiles() {
     Serial.println(file.name());
     file = root.openNextFile();
   }
+}
+
+void printPartitionUsage() {
+  Serial.println("\n=== Partition Usage ===");
+
+  // Lista todas as partições
+  const esp_partition_t* partition = nullptr;
+  esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+
+  while (it != NULL) {
+    partition = esp_partition_get(it);
+    if (partition) {
+      Serial.printf("Name: %-12s | Type: %d | Subtype: %02x | Address: 0x%06x | Size: %6d bytes\n",
+                    partition->label, partition->type, partition->subtype,
+                    partition->address, partition->size);
+    }
+    it = esp_partition_next(it);
+  }
+  esp_partition_iterator_release(it);
+
+  // -----------------------------
+  // APP (firmware) partition info
+  // -----------------------------
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (running) {
+    Serial.printf("\nRunning App Partition: %s\n", running->label);
+    Serial.printf("Address: 0x%06x | Size: %d bytes\n", running->address, running->size);
+  }
+
+  // -----------------------------
+  // LittleFS usage
+  // -----------------------------
+  if (LittleFS.begin()) {
+    size_t total = LittleFS.totalBytes();
+    size_t used = LittleFS.usedBytes();
+    Serial.printf("\nLittleFS: Used %d / %d bytes (%.2f%%)\n", used, total, (100.0 * used / total));
+  } else {
+    Serial.println("LittleFS not mounted.");
+  }
+
+  Serial.println("==========================\n");
 }
