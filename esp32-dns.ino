@@ -103,9 +103,10 @@ void setup() {
   // Load configuration
   loadConfig();
 
-  if (!LittleFS.begin()) {
-    Serial.println("LittleFS mount failed");
-    return;
+  // Initialize LittleFS with format on failure
+  if (!initLittleFS()) {
+    Serial.println("Failed to initialize LittleFS. Web interface will not work.");
+    // Continue without LittleFS - basic functionality will still work
   }
 
   // Setup web server routes
@@ -485,4 +486,22 @@ void handleWiFi() {
       }
       break;
   }
+}
+
+
+bool initLittleFS() {
+  if (!LittleFS.begin(false)) { // Don't format if mount fails
+    Serial.println("LittleFS mount failed. Attempting to format...");
+    if (LittleFS.format()) {
+      Serial.println("LittleFS formatted successfully.");
+      if (LittleFS.begin()) {
+        Serial.println("LittleFS mounted after format.");
+        return true;
+      }
+    }
+    Serial.println("LittleFS format failed.");
+    return false;
+  }
+  Serial.println("LittleFS mounted successfully.");
+  return true;
 }
