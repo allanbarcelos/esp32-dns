@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <WebServer.h>
 #include <EEPROM.h>
+#include <Preferences.h>
 
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
@@ -313,23 +314,21 @@ void handleSaveConfig() {
 // CONFIG STORAGE
 // ----------------------------
 void loadConfig() {
-  EEPROM.begin(sizeof(Config));
-  EEPROM.get(0, config);
-  CF_TOKEN = String(config.cf_token);
-  CF_ZONE  = String(config.cf_zone);
-  CF_RECORD = String(config.cf_record);
-  CF_HOST = String(config.cf_host);
+  prefs.begin("myConfig", true);
+  CF_TOKEN = prefs.getString("cf_token", "");
+  CF_ZONE = prefs.getString("cf_zone", "");
+  CF_RECORD = prefs.getString("cf_record", "");
+  CF_HOST = prefs.getString("cf_host", "");
+  prefs.end();
 }
 
 void saveConfig() {
-  strncpy(config.cf_token, CF_TOKEN.c_str(), sizeof(config.cf_token));
-  strncpy(config.cf_zone, CF_ZONE.c_str(), sizeof(config.cf_zone));
-  strncpy(config.cf_record, CF_RECORD.c_str(), sizeof(config.cf_record));
-  strncpy(config.cf_host, CF_HOST.c_str(), sizeof(config.cf_host));
-
-  EEPROM.begin(sizeof(Config));
-  EEPROM.put(0, config);
-  EEPROM.commit();
+  prefs.begin("myConfig", false);
+  prefs.putString("cf_token", CF_TOKEN);
+  prefs.putString("cf_zone", CF_ZONE);
+  prefs.putString("cf_record", CF_RECORD);
+  prefs.putString("cf_host", CF_HOST);
+  prefs.end();
 }
 
 // ----------------------------
