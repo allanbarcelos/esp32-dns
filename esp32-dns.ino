@@ -300,7 +300,7 @@ void handleRoot() {
 
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
-    server.send(404, "text/plain", "File not found " + firmware_version);
+    server.send(404, "text/plain", "File not found " + String(firmware_version));
     return;
   }
 
