@@ -46,6 +46,13 @@ enum WifiConnState_t { WIFI_OK, WIFI_DISCONNECTED, WIFI_RECONNECTING, WIFI_WAIT 
 WifiConnState_t wifiState = WIFI_OK;
 unsigned long waitStart = 0;
 
+
+// ----------------------------
+// GLOBAL VARS
+// ----------------------------
+unsigned long lastIpPrint = 0;
+const unsigned long ipPrintInterval = 60000UL; // 1 minute (60.000 ms)
+
 // ----------------------------
 // WEB SERVER
 // ----------------------------
@@ -121,8 +128,11 @@ void loop() {
     handleDNSUpdate();
   }
 
-  // Optional: print local IP periodically
-  Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
+  // Print local IP periodically
+  if (now - lastIpPrint >= ipPrintInterval) {
+    Serial.printf("Local IP: %s\n", WiFi.localIP().toString().c_str());
+    lastIpPrint = now;
+  }
 }
 
 // ----------------------------
