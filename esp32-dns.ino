@@ -6,6 +6,7 @@
 #include <WebServer.h>
 #include <EEPROM.h>
 #include <Preferences.h>
+#include <LittleFS.h>
 
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
@@ -102,8 +103,13 @@ void setup() {
   // Load configuration
   loadConfig();
 
+  if (!LittleFS.begin()) {
+    Serial.println("LittleFS mount failed");
+    return;
+  }
+
   // Setup web server routes
-  server.on("/", handleRoot);
+  server.on("/", HTTP_GET, handleRoot);
   server.on("/save", handleSaveConfig);
   server.begin();
 
@@ -277,25 +283,34 @@ void checkForUpdate() {
 // ----------------------------
 // WEB SERVER HANDLERS
 // ----------------------------
-void handleRoot() {
-  String publicIP = getPublicIP();
 
-  String html = "<html><head><title>ESP32 OTA</title>"
-                "<style>body{font-family:sans-serif;background:#f2f2f2;text-align:center;margin-top:50px;}</style></head><body>"
-                "<h1>ESP32 OTA</h1>"
-                "<p><b>Firmware:</b> " + String(firmware_version) + "</p>"
-                "<p><b>WiFi:</b> " + WiFi.SSID() + "</p>"
-                "<p><b>Local IP:</b> " + WiFi.localIP().toString() + "</p>"
-                "<p><b>Public IP:</b> " + publicIP + "</p>"
-                "<hr />"
-                "<h2>DNS Settings</h2>"
-                "<form method='POST' action='/save'>"
-                "Cloudflare Token: <input name='cf_token' value='" + String(CF_TOKEN) + "'><br>"
-                "Zone ID: <input name='cf_zone' value='" + String(CF_ZONE) + "'><br>"
-                "Record ID: <input name='cf_record' value='" + String(CF_RECORD) + "'><br>"
-                "HOST: <input name='cf_host' value='" + String(CF_HOST) + "'><br>"
-                "<button type='submit'>Save</button>"
-                "</body></html>";
+void handleRoot() {
+  if (!LittleFS.begin()) {
+    server.send(500, "text/plain", "LittleFS mount failed");
+    return;
+  }
+
+  File file = LittleFS.open("/index.html", "r");
+  if (!file) {
+    server.send(404, "text/plain", "File not found");
+    return;
+  }
+
+  String html = "";
+  while (file.available()) {
+    html += char(file.read());
+  }
+  file.close();
+
+  // Substituir placeholders
+  html.replace("{{FIRMWARE_VERSION}}", firmware_version);
+  html.replace("{{WIFI_SSID}}", WiFi.SSID());
+  html.replace("{{LOCAL_IP}}", WiFi.localIP().toString());
+  html.replace("{{PUBLIC_IP}}", getPublicIP());
+  html.replace("{{CF_TOKEN}}", CF_TOKEN);
+  html.replace("{{CF_ZONE}}", CF_ZONE);
+  html.replace("{{CF_RECORD}}", CF_RECORD);
+  html.replace("{{CF_HOST}}", CF_HOST);
 
   server.send(200, "text/html", html);
 }
