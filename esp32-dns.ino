@@ -145,16 +145,16 @@ void checkForUpdate() {
   }
 
   Serial.println("Checking GitHub API for update...");
-
   WiFiClientSecure client;
-  client.setInsecure(); // Ignore SSL
+  client.setInsecure();
   HTTPClient http;
+
   http.begin(client, github_api);
   http.addHeader("User-Agent", "ESP32");
   int httpCode = http.GET();
 
   if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("Failed to access GitHub API. Code: %d\n", httpCode);
+    Serial.printf("GitHub API error: %d\n", httpCode);
     http.end();
     return;
   }
@@ -165,7 +165,7 @@ void checkForUpdate() {
   DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
-    Serial.printf("Error parsing JSON: %s\n", error.c_str());
+    Serial.printf("JSON parse error: %s\n", error.c_str());
     return;
   }
 
@@ -177,66 +177,85 @@ void checkForUpdate() {
 
   JsonArray assets = doc["assets"];
   if (assets.size() == 0) {
-    Serial.println("No binary found in release.");
+    Serial.println("No binary in release.");
     return;
   }
 
   String binUrl = assets[0]["browser_download_url"];
-  Serial.printf("New release found: %s\nDownloading binary from: %s\n", latestVersion.c_str(), binUrl.c_str());
+  Serial.printf("New release %s found. Downloading from %s\n", latestVersion.c_str(), binUrl.c_str());
 
-  const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
-  if (!update_partition) {
-    Serial.println("Error getting OTA target partition.");
-    return;
-  }
+  // Start OTA
+  http.begin(client, binUrl);
+  http.addHeader("User-Agent", "ESP32");
+  int binCode = http.GET();
 
-  HTTPClient binHttp;
-  binHttp.begin(client, binUrl);
-  binHttp.addHeader("User-Agent", "ESP32");
-  int binCode = binHttp.GET();
-
-  // Handle redirect
   if (binCode == HTTP_CODE_MOVED_PERMANENTLY || binCode == HTTP_CODE_FOUND) {
-    String redirectUrl = binHttp.getLocation();
+    String redirectUrl = http.getLocation();
     Serial.printf("Redirect detected. Following to: %s\n", redirectUrl.c_str());
-    binHttp.end();
-    binHttp.begin(client, redirectUrl);
-    binHttp.addHeader("User-Agent", "ESP32");
-    binCode = binHttp.GET();
+    http.end();
+    http.begin(client, redirectUrl);
+    http.addHeader("User-Agent", "ESP32");
+    binCode = http.GET();
   }
 
   if (binCode != HTTP_CODE_OK) {
-    Serial.printf("Failed to download binary. Code: %d\n", binCode);
-    binHttp.end();
+    Serial.printf("Failed to download binary. HTTP code: %d\n", binCode);
+    http.end();
     return;
   }
 
-  int contentLength = binHttp.getSize();
-  WiFiClient* stream = binHttp.getStreamPtr();
-
+  int contentLength = http.getSize();
   if (contentLength <= 0) {
-    Serial.println("Binary content empty. Aborting OTA.");
-    binHttp.end();
+    Serial.println("Binary content empty.");
+    http.end();
     return;
   }
 
-  Serial.printf("Starting OTA. Binary size: %d bytes\n", contentLength);
+  const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
+  if (!update_partition) {
+    Serial.println("OTA partition error.");
+    http.end();
+    return;
+  }
+
+  Serial.printf("Starting OTA. Size: %d bytes\n", contentLength);
   if (!Update.begin(contentLength, U_FLASH, update_partition->address)) {
-    Serial.printf("Failed to start OTA: %s\n", Update.errorString());
-    binHttp.end();
+    Serial.printf("OTA begin failed: %s\n", Update.errorString());
+    http.end();
     return;
   }
 
-  size_t written = Update.writeStream(*stream);
+  // Write in chunks
+  WiFiClient *stream = http.getStreamPtr();
+  size_t written = 0;
+  uint8_t buf[1024];
+  while (http.connected() && written < contentLength) {
+    size_t len = stream->available();
+    if (len) {
+      if (len > sizeof(buf)) len = sizeof(buf);
+      int c = stream->readBytes(buf, len);
+      if (c > 0) {
+        if (Update.write(buf, c) != c) {
+          Serial.printf("OTA write error: %s\n", Update.errorString());
+          http.end();
+          return;
+        }
+        written += c;
+        Serial.printf("OTA progress: %d/%d bytes\n", written, contentLength);
+      }
+    }
+  }
+
   if (Update.end(true)) {
     if (Update.isFinished()) Serial.println("OTA update completed successfully!");
-    else Serial.println("Update did not finish correctly.");
+    else Serial.println("OTA did not finish correctly.");
   } else {
-    Serial.printf("OTA Error: %s\n", Update.errorString());
+    Serial.printf("OTA end error: %s\n", Update.errorString());
   }
 
-  binHttp.end();
+  http.end();
 }
+
 
 // ----------------------------
 // WEB SERVER HANDLERS
@@ -322,25 +341,38 @@ String getDNSHostIP(String host) {
   return "";
 }
 
-void dnsUpdate(String ip) {
-  String url = "https://api.cloudflare.com/client/v4/zones/" + String(CF_ZONE) + "/dns_records/" + String(CF_RECORD);
+void dnsUpdate(const String &ip) {
+  if (CF_ZONE == "" || CF_RECORD == "" || CF_HOST == "") {
+    Serial.println("DNS config missing.");
+    return;
+  }
+
+  String url = "https://api.cloudflare.com/client/v4/zones/" + CF_ZONE + "/dns_records/" + CF_RECORD;
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
   http.begin(client, url);
-  http.addHeader("Authorization", "Bearer " + String(CF_TOKEN));
+  http.addHeader("Authorization", "Bearer " + CF_TOKEN);
   http.addHeader("Content-Type", "application/json");
-  String payload = "{\"content\":\"" + ip + "\"}";
+
+  // Cloudflare expects full record JSON
+  String payload = "{\"type\":\"A\",\"name\":\"" + CF_HOST + "\",\"content\":\"" + ip + "\",\"ttl\":1,\"proxied\":false}";
   int code = http.PATCH(payload);
+
   if (code > 0) {
     String resp = http.getString();
-    if (resp.indexOf("\"success\":true") >= 0) Serial.println("DNS successfully updated!");
-    else Serial.println("Failed to update DNS.");
+    if (resp.indexOf("\"success\":true") >= 0) {
+      Serial.println("DNS successfully updated!");
+    } else {
+      Serial.println("Failed to update DNS. Response: " + resp);
+    }
   } else {
-    Serial.println("Error updating DNS. Code: " + String(code));
+    Serial.println("Error connecting to Cloudflare. HTTP code: " + String(code));
   }
+
   http.end();
 }
+
 
 void handleDNSUpdate() {
   String publicIP = getPublicIP();
