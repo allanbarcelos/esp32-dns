@@ -168,7 +168,7 @@ void checkForUpdate() {
   String payload = http.getString();
   http.end();
 
-  JsonDocument doc(16384);
+  DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
     Serial.printf("JSON parse error: %s\n", error.c_str());
@@ -414,6 +414,7 @@ void handleWiFi() {
       }
       break;
 
+    case WIFI_DISCONNECTED:
     case WIFI_RECONNECTING:
       if (WiFi.status() == WL_CONNECTED) {
         Serial.println("Reconnected!");
