@@ -36,6 +36,8 @@ const char* github_api = "https://api.github.com/repos/allanbarcelos/esp32-dns/r
 const unsigned long otaCheckInterval = 10 * 60 * 1000UL; // 10 minutes
 unsigned long lastOtaCheck = 0;
 
+const char* html_raw_url = "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/index.html";
+
 // ----------------------------
 // WIFI & RECONNECT SETTINGS
 // ----------------------------
@@ -269,7 +271,14 @@ void checkForUpdate() {
 
   if (Update.end(true)) {
     if (Update.isFinished()) {
-        Serial.println("OTA update completed successfully! Rebooting...");
+        Serial.println("OTA update completed successfully!");
+        // Update HTML file before rebooting
+        if (updateHTMLFromGitHub()) {
+          Serial.println("HTML file updated successfully!");
+        } else {
+          Serial.println("Failed to update HTML file, but firmware update was successful");
+        }
+        Serial.println("Rebooting...");
         ESP.restart(); 
     } else {
         Serial.println("OTA did not finish correctly.");
@@ -553,4 +562,54 @@ void printPartitionUsage() {
   }
 
   Serial.println("==========================\n");
+}
+
+
+// ----------------------------
+// HTML UPDATE FUNCTION
+// ----------------------------
+bool updateHTMLFromGitHub() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected. Cannot update HTML.");
+    return false;
+  }
+
+  Serial.println("Downloading HTML from GitHub...");
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  http.begin(client, html_raw_url);
+  http.addHeader("User-Agent", "ESP32");
+  int httpCode = http.GET();
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("Failed to download HTML. HTTP code: %d\n", httpCode);
+    http.end();
+    return false;
+  }
+
+  // Open file for writing (truncate existing)
+  File file = LittleFS.open("/index.html", "w");
+  if (!file) {
+    Serial.println("Failed to open index.html for writing");
+    http.end();
+    return false;
+  }
+
+  // Get the HTML content
+  String htmlContent = http.getString();
+  http.end();
+
+  // Write to file
+  size_t bytesWritten = file.write((const uint8_t*)htmlContent.c_str(), htmlContent.length());
+  file.close();
+
+  if (bytesWritten == htmlContent.length()) {
+    Serial.printf("HTML file updated successfully. Wrote %d bytes\n", bytesWritten);
+    return true;
+  } else {
+    Serial.printf("Failed to write HTML file. Expected: %d, Written: %d\n", htmlContent.length(), bytesWritten);
+    return false;
+  }
 }
