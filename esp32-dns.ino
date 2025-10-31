@@ -36,7 +36,22 @@ const char* github_api = "https://api.github.com/repos/allanbarcelos/esp32-dns/r
 const unsigned long otaCheckInterval = 10 * 60 * 1000UL; // 10 minutes
 unsigned long lastOtaCheck = 0;
 
-const char* html_raw_url = "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/index.html";
+// const char* html_raw_url = "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/index.html";
+
+
+struct RemoteFile {
+  const char* url;
+  const char* path; // caminho dentro do LittleFS
+};
+
+RemoteFile files[] = {
+  { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/index.html", "/index.html" },
+  { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/vite.svg", "/vite.svg" },
+  { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/assets/index-BHcy5At-.css", "/assets/index-BHcy5At-.css" },
+  { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/assets/index-CTMJhQ4O.js", "/assets/index-CTMJhQ4O.js" },
+};
+
+
 
 // ----------------------------
 // WIFI & RECONNECT SETTINGS
@@ -287,8 +302,8 @@ void checkForUpdate() {
     if (Update.isFinished()) {
         Serial.println("OTA update completed successfully!");
         // Update HTML file before rebooting
-        if (updateHTMLFromGitHub()) {
-          Serial.println("HTML file updated successfully!");
+        if (updateDistFiles()) {
+          Serial.println("WebPage files updated successfully!");
         } else {
           Serial.println("Failed to update HTML file, but firmware update was successful");
         }
@@ -574,56 +589,6 @@ void printPartitionUsage() {
   Serial.println("==========================\n");
 }
 
-
-// ----------------------------
-// HTML UPDATE FUNCTION
-// ----------------------------
-bool updateHTMLFromGitHub() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi not connected. Cannot update HTML.");
-    return false;
-  }
-
-  Serial.println("Downloading HTML from GitHub...");
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-
-  http.begin(client, html_raw_url);
-  http.addHeader("User-Agent", "ESP32");
-  int httpCode = http.GET();
-
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("Failed to download HTML. HTTP code: %d\n", httpCode);
-    http.end();
-    return false;
-  }
-
-  // Open file for writing (truncate existing)
-  File file = LittleFS.open("/index.html", "w");
-  if (!file) {
-    Serial.println("Failed to open index.html for writing");
-    http.end();
-    return false;
-  }
-
-  // Get the HTML content
-  String htmlContent = http.getString();
-  http.end();
-
-  // Write to file
-  size_t bytesWritten = file.write((const uint8_t*)htmlContent.c_str(), htmlContent.length());
-  file.close();
-
-  if (bytesWritten == htmlContent.length()) {
-    Serial.printf("HTML file updated successfully. Wrote %d bytes\n", bytesWritten);
-    return true;
-  } else {
-    Serial.printf("Failed to write HTML file. Expected: %d, Written: %d\n", htmlContent.length(), bytesWritten);
-    return false;
-  }
-}
-
 void periodicGet() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected. Skipping GET.");
@@ -645,3 +610,54 @@ void periodicGet() {
 
   http.end();
 }
+
+bool downloadFileToLittleFS(const char* url, const char* path) {
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  http.begin(client, url);
+  http.addHeader("User-Agent", "ESP32");
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("Failed to download %s. HTTP %d\n", url, code);
+    http.end();
+    return false;
+  }
+
+  String content = http.getString();
+  http.end();
+
+  // Criar pastas se necessário
+  String lfsPath = path;
+  int lastSlash = lfsPath.lastIndexOf('/');
+  if (lastSlash > 0) {
+    String dir = lfsPath.substring(0, lastSlash);
+    LittleFS.mkdir(dir);
+  }
+
+  File f = LittleFS.open(path, "w");
+  if (!f) {
+    Serial.printf("Failed to open %s for writing\n", path);
+    return false;
+  }
+
+  f.write((const uint8_t*)content.c_str(), content.length());
+  f.close();
+  Serial.printf("Saved %s (%d bytes)\n", path, content.length());
+  return true;
+}
+
+bool updateDistFiles() {
+  bool allSuccess = true;
+
+  for (auto &file : files) {
+    bool ok = downloadFileToLittleFS(file.url, file.path);
+    if (!ok) allSuccess = false;
+  }
+
+  return allSuccess;
+}
+
