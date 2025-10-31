@@ -122,7 +122,8 @@ void OTAManager::checkForUpdate() {
   String payload = http.getString();
   http.end();
 
-  DynamicJsonDocument doc(16384);
+  // Substituir DynamicJsonDocument por JsonDocument para evitar warning
+  JsonDocument doc; // Em vez de DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
     Serial.printf("JSON parse error: %s\n", error.c_str());

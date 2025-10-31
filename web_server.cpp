@@ -3,6 +3,7 @@
 #include "file_manager.h"
 #include "dns_manager.h"
 #include "secrets.h"
+#include <WiFi.h> 
 
 WebServerManager webServerManager;
 
@@ -16,7 +17,7 @@ void WebServerManager::handleRoot() {
   html.replace("{{FIRMWARE_VERSION}}", firmware_version);
   html.replace("{{WIFI_SSID}}", WiFi.SSID());
   html.replace("{{LOCAL_IP}}", WiFi.localIP().toString());
-  html.replace("{{PUBLIC_IP}}", dnsManager.getPublicIP());
+  html.replace("{{PUBLIC_IP}}", dnsManager.getPublicIP()); 
   html.replace("{{CF_TOKEN}}", configManager.CF_TOKEN);
   html.replace("{{CF_ZONE}}", configManager.CF_ZONE);
   html.replace("{{CF_RECORD}}", configManager.CF_RECORD);

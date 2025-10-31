@@ -26,6 +26,9 @@ void setup() {
 
   Serial.println("=== Initializing ESP32 OTA with rollback ===");
 
+  // Inicializar EEPROM
+  EEPROM.begin(512);
+
   // Confirm new firmware if necessary
   const esp_partition_t* running = esp_ota_get_running_partition();
   esp_ota_img_states_t otaState;
@@ -59,8 +62,13 @@ void loop() {
 
   wifiManager.handleWiFi();
 
-  // OTA check
-  otaManager.checkForUpdate();
+  // OTA check - chamar periodicamente
+  static unsigned long lastOtaCheck = 0;
+  const unsigned long otaCheckInterval = 10 * 60 * 1000UL; // 10 minutes
+  if (now - lastOtaCheck > otaCheckInterval) {
+    otaManager.checkForUpdate();
+    lastOtaCheck = now;
+  }
 
   // Daily reboot (non-blocking)
   static unsigned long bootTime = millis();
