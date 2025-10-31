@@ -31,14 +31,19 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@3.0.4
 
+      #- name: Install libraries
+      #  run: |
+      #    arduino-cli lib install --git-url https://github.com/allanbarcelos/ESP32_BLE_Keyboard.git
+      #    arduino-cli lib install "ArduinoJson@7.2.0"
+      #    arduino-cli lib install "ESPping@1.0.4"
+      #    arduino-cli lib install "PubSubClient@2.8"
+      #    arduino-cli lib install --git-url https://github.com/me-no-dev/AsyncTCP.git
+      #    arduino-cli lib install --git-url https://github.com/marvinroger/async-mqtt-client.git
+
       - name: Install libraries
         run: |
           arduino-cli lib install --git-url https://github.com/allanbarcelos/ESP32_BLE_Keyboard.git
           arduino-cli lib install "ArduinoJson@7.2.0"
-          arduino-cli lib install "ESPping@1.0.4"
-          arduino-cli lib install "PubSubClient@2.8"
-          arduino-cli lib install --git-url https://github.com/me-no-dev/AsyncTCP.git
-          arduino-cli lib install --git-url https://github.com/marvinroger/async-mqtt-client.git
 
       - name: Generate secrets.h
         run: |
