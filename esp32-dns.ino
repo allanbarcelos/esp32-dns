@@ -402,35 +402,25 @@ String getDNSHostIP(String host) {
   return "";
 }
 
-void dnsUpdate(const String &ip) {
-  if (CF_ZONE == "" || CF_RECORD == "" || CF_HOST == "") {
-    Serial.println("DNS config missing.");
-    return;
-  }
-
-  String url = "https://api.cloudflare.com/client/v4/zones/" + CF_ZONE + "/dns_records/" + CF_RECORD;
+void dnsUpdate(String ip) {
+  String url = "https://api.cloudflare.com/client/v4/zones/" + String(CF_ZONE) + "/dns_records/" + String(CF_RECORD);
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
   http.begin(client, url);
-  http.addHeader("Authorization", "Bearer " + CF_TOKEN);
+  http.addHeader("Authorization", "Bearer " + String(CF_TOKEN));
   http.addHeader("Content-Type", "application/json");
-
-  // Cloudflare expects full record JSON
-  String payload = "{\"type\":\"A\",\"name\":\"" + CF_HOST + "\",\"content\":\"" + ip + "\",\"ttl\":1,\"proxied\":false}";
+  String payload = "{\"content\":\"" + ip + "\"}";
   int code = http.PATCH(payload);
-
   if (code > 0) {
     String resp = http.getString();
-    if (resp.indexOf("\"success\":true") >= 0) {
+    if (resp.indexOf("\"success\":true") >= 0)
       Serial.println("DNS successfully updated!");
-    } else {
-      Serial.println("Failed to update DNS. Response: " + resp);
-    }
+    else
+      Serial.println("Failed to update DNS.");
   } else {
-    Serial.println("Error connecting to Cloudflare. HTTP code: " + String(code));
+    Serial.println("Error updating DNS. Code: " + String(code));
   }
-
   http.end();
 }
 
