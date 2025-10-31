@@ -27,16 +27,21 @@
     </main>
 
   <!-- Register Page -->
-  <main id="registerPage" class="hidden">
-    <h1>Registro</h1>
-    <form id="registerForm">
-      <label for="regUser">Usuário</label>
-      <input type="text" id="regUser" required>
-      <label for="regPass">Senha</label>
-      <input type="password" id="regPass" required>
-      <button type="submit">Registrar</button>
-    </form>
-    <p>Já tem conta? <a href="#" onclick="showPage('loginPage')">Login</a></p>
+  <main id="registerPage"  class="container">
+    <div class="grid">
+        <div>&nbsp;</div>
+        <div>
+            <h1>Registro</h1>
+            <form id="registerForm">
+                <label for="regUser">Usuário</label>
+                <input type="text" id="regUser" required>
+                <label for="regPass">Senha</label>
+                <input type="password" id="regPass" required>
+                <button type="submit">Registrar</button>
+            </form>
+        </div>
+        <div>&nbsp;</div>
+    </div>
   </main>
 
   <!-- Dashboard Layout -->
@@ -90,7 +95,7 @@
       document.getElementById(sectionId).classList.remove('hidden');
     }
 
-    
+
   </script>
 
 </body>
