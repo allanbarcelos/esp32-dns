@@ -51,8 +51,6 @@ RemoteFile files[] = {
   { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/assets/index-CTMJhQ4O.js", "/assets/index-CTMJhQ4O.js" },
 };
 
-
-
 // ----------------------------
 // WIFI & RECONNECT SETTINGS
 // ----------------------------
@@ -611,15 +609,45 @@ void periodicGet() {
   http.end();
 }
 
+
+
+#include <FS.h>
+#include <LittleFS.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+// Função auxiliar: cria diretórios recursivamente
+bool mkdirRecursively(const String &path) {
+  if (path.length() == 0 || path == "/") return true;
+
+  if (LittleFS.exists(path)) return true;
+
+  int lastSlash = path.lastIndexOf('/');
+  if (lastSlash > 0) {
+    String parent = path.substring(0, lastSlash);
+    if (!mkdirRecursively(parent)) return false;
+  }
+
+  if (LittleFS.mkdir(path)) {
+    Serial.printf("Created directory: %s\n", path.c_str());
+    return true;
+  } else {
+    Serial.printf("Failed to create directory: %s\n", path.c_str());
+    return false;
+  }
+}
+
+// Função principal: download para LittleFS
 bool downloadFileToLittleFS(const char* url, const char* path) {
   if (WiFi.status() != WL_CONNECTED) return false;
 
   WiFiClientSecure client;
   client.setInsecure();
-  HTTPClient http;
 
+  HTTPClient http;
   http.begin(client, url);
   http.addHeader("User-Agent", "ESP32");
+
   int code = http.GET();
   if (code != HTTP_CODE_OK) {
     Serial.printf("Failed to download %s. HTTP %d\n", url, code);
@@ -627,28 +655,55 @@ bool downloadFileToLittleFS(const char* url, const char* path) {
     return false;
   }
 
-  String content = http.getString();
-  http.end();
+  int contentLength = http.getSize();
+  if (contentLength <= 0) {
+    Serial.printf("Empty content for %s\n", url);
+    http.end();
+    return false;
+  }
 
-  // Criar pastas se necessário
+  // Criar diretórios recursivamente
   String lfsPath = path;
   int lastSlash = lfsPath.lastIndexOf('/');
   if (lastSlash > 0) {
     String dir = lfsPath.substring(0, lastSlash);
-    LittleFS.mkdir(dir);
+    if (!mkdirRecursively(dir)) {
+      http.end();
+      return false;
+    }
   }
 
+  // Abrir arquivo para escrita binária
   File f = LittleFS.open(path, "w");
   if (!f) {
     Serial.printf("Failed to open %s for writing\n", path);
+    http.end();
     return false;
   }
 
-  f.write((const uint8_t*)content.c_str(), content.length());
+  WiFiClient *stream = http.getStreamPtr();
+  uint8_t buffer[1024];
+  int written = 0;
+
+  while (http.connected() && written < contentLength) {
+    size_t len = stream->available();
+    if (len) {
+      if (len > sizeof(buffer)) len = sizeof(buffer);
+      int c = stream->readBytes(buffer, len);
+      if (c > 0) {
+        f.write(buffer, c);
+        written += c;
+        Serial.printf("Downloading %s: %d/%d bytes\r", path, written, contentLength);
+      }
+    }
+  }
+
   f.close();
-  Serial.printf("Saved %s (%d bytes)\n", path, content.length());
+  http.end();
+  Serial.printf("\nSaved %s (%d bytes)\n", path, written);
   return true;
 }
+
 
 bool updateDistFiles() {
   bool allSuccess = true;
