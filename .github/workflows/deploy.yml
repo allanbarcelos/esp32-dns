@@ -48,6 +48,12 @@ jobs:
           echo 'const char* ssid = "${{ secrets.WIFI_SSID }}";' >> secrets.h
           echo 'const char* password = "${{ secrets.WIFI_PASS }}";' >> secrets.h
           echo "const char* firmware_version = \"v${{ github.run_number }}\";" >> secrets.h
+
+          echo "const char* cf_token = \"v${{ github.run_number }}\";" >> secrets.h
+          echo "const char* cf_zone = \"v${{ github.run_number }}\";" >> secrets.h
+          echo "const char* cf_record = \"v${{ github.run_number }}\";" >> secrets.h
+          echo "const char* cf_host = \"v${{ github.run_number }}\";" >> secrets.h
+
           echo '' >> secrets.h
           echo '#endif' >> secrets.h
 
