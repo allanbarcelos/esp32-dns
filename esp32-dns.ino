@@ -71,7 +71,7 @@ String CF_HOST = "";
 // ----------------------------
 // PING / GET PERIODIC REQUEST
 // ----------------------------
-const unsigned long getInterval = 15000UL; // 15 segundos
+const unsigned long getInterval = 300000UL;
 unsigned long lastGetTime = 0;
 
 
