@@ -47,8 +47,6 @@ struct RemoteFile {
 RemoteFile files[] = {
   { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/index.html", "/index.html" },
   { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/vite.svg", "/vite.svg" },
-  { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/assets/index-BHcy5At-.css", "/assets/index-BHcy5At-.css" },
-  { "https://raw.githubusercontent.com/allanbarcelos/esp32-dns/main/data/dist/assets/index-CTMJhQ4O.js", "/assets/index-CTMJhQ4O.js" },
 };
 
 // ----------------------------
