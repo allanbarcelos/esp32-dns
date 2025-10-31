@@ -69,6 +69,13 @@ String CF_RECORD = "";
 String CF_HOST = "";
 
 // ----------------------------
+// PING / GET PERIODIC REQUEST
+// ----------------------------
+const unsigned long getInterval = 15000UL; // 15 segundos
+unsigned long lastGetTime = 0;
+
+
+// ----------------------------
 // WEB SERVER
 // ----------------------------
 WebServer server(80);
@@ -156,6 +163,13 @@ void loop() {
     printPartitionUsage();
     lastIpPrint = now;
   }
+
+  // Periodic GET request every 15 seconds
+  if (now - lastGetTime >= getInterval) {
+    lastGetTime = now;
+    periodicGet();
+  }
+
 }
 
 // ----------------------------
@@ -612,4 +626,26 @@ bool updateHTMLFromGitHub() {
     Serial.printf("Failed to write HTML file. Expected: %d, Written: %d\n", htmlContent.length(), bytesWritten);
     return false;
   }
+}
+
+void periodicGet() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected. Skipping GET.");
+    return;
+  }
+
+  WiFiClient client;
+  HTTPClient http;
+  String url = "http://158.69.220.0";
+
+  http.begin(client, url);
+  int httpCode = http.GET();
+
+  if (httpCode > 0) {
+    Serial.printf("GET %s -> HTTP %d\n", url.c_str(), httpCode);
+  } else {
+    Serial.printf("GET %s failed, error: %s\n", url.c_str(), http.errorToString(httpCode).c_str());
+  }
+
+  http.end();
 }
