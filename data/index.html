@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32</title>
-  <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@2.1.1/css/pico.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32</title>
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@2.1.1/css/pico.min.css">
 </head>
+
 <body>
 
     <!-- Login Page -->
@@ -26,77 +28,78 @@
         </div>
     </main>
 
-  <!-- Register Page -->
-  <main id="registerPage"  class="container">
-    <div class="grid">
-        <div>&nbsp;</div>
-        <div>
-            <h1>Registro</h1>
-            <form id="registerForm">
-                <label for="regUser">Usuário</label>
-                <input type="text" id="regUser" required>
-                <label for="regPass">Senha</label>
-                <input type="password" id="regPass" required>
-                <button type="submit">Registrar</button>
-            </form>
+    <!-- Register Page -->
+    <main id="registerPage" class="container">
+        <div class="grid">
+            <div>&nbsp;</div>
+            <div>
+                <h1>Registro</h1>
+                <form id="registerForm">
+                    <label for="regUser">Usuário</label>
+                    <input type="text" id="regUser" required>
+                    <label for="regPass">Senha</label>
+                    <input type="password" id="regPass" required>
+                    <button type="submit">Registrar</button>
+                </form>
+            </div>
+            <div>&nbsp;</div>
         </div>
-        <div>&nbsp;</div>
+    </main>
+
+    <!-- Dashboard Layout -->
+    <div id="appLayout" class="hidden layout">
+        <nav class="sidebar">
+            <h3>Menu</h3>
+            <ul>
+                <li><a href="#" onclick="showSection('dashboard')">Dashboard</a></li>
+                <li><a href="#" onclick="showSection('cloudflare')">Cloudflare</a></li>
+                <li><a href="#" onclick="logout()">Sair</a></li>
+            </ul>
+        </nav>
+        <div class="content">
+            <!-- Dashboard -->
+            <section id="dashboard">
+                <h1>Dashboard</h1>
+                <p><strong>Memória:</strong> <span id="memInfo">-- MB</span></p>
+                <p><strong>CPU:</strong> <span id="cpuInfo">--%</span></p>
+                <p><strong>Temperatura:</strong> <span id="tempInfo">--°C</span></p>
+            </section>
+
+            <!-- Cloudflare -->
+            <section id="cloudflare" class="hidden">
+                <h1>Cloudflare</h1>
+                <form id="cfForm">
+                    <label for="cf_token">Token</label>
+                    <input type="password" id="cf_token" maxlength="64" required>
+                    <label for="cf_zone">Zone</label>
+                    <input type="text" id="cf_zone" maxlength="32" required>
+                    <label for="cf_record">Record</label>
+                    <input type="text" id="cf_record" maxlength="32" required>
+                    <label for="cf_host">Host</label>
+                    <input type="text" id="cf_host" maxlength="64" required>
+                    <button type="submit">Salvar</button>
+                </form>
+            </section>
+        </div>
     </div>
-  </main>
 
-  <!-- Dashboard Layout -->
-  <div id="appLayout" class="hidden layout">
-    <nav class="sidebar">
-      <h3>Menu</h3>
-      <ul>
-        <li><a href="#" onclick="showSection('dashboard')">Dashboard</a></li>
-        <li><a href="#" onclick="showSection('cloudflare')">Cloudflare</a></li>
-        <li><a href="#" onclick="logout()">Sair</a></li>
-      </ul>
-    </nav>
-    <div class="content">
-      <!-- Dashboard -->
-      <section id="dashboard">
-        <h1>Dashboard</h1>
-        <p><strong>Memória:</strong> <span id="memInfo">-- MB</span></p>
-        <p><strong>CPU:</strong> <span id="cpuInfo">--%</span></p>
-        <p><strong>Temperatura:</strong> <span id="tempInfo">--°C</span></p>
-      </section>
+    <script>
+        function showPage(pageId) {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('registerPage').classList.add('hidden');
+            document.getElementById('appLayout').classList.add('hidden');
+            document.getElementById(pageId).classList.remove('hidden');
+        }
 
-      <!-- Cloudflare -->
-      <section id="cloudflare" class="hidden">
-        <h1>Cloudflare</h1>
-        <form id="cfForm">
-          <label for="cf_token">Token</label>
-          <input type="password" id="cf_token" maxlength="64" required>
-          <label for="cf_zone">Zone</label>
-          <input type="text" id="cf_zone" maxlength="32" required>
-          <label for="cf_record">Record</label>
-          <input type="text" id="cf_record" maxlength="32" required>
-          <label for="cf_host">Host</label>
-          <input type="text" id="cf_host" maxlength="64" required>
-          <button type="submit">Salvar</button>
-        </form>
-      </section>
-    </div>
-  </div>
-
-  <script>
-    function showPage(pageId) {
-      document.getElementById('loginPage').classList.add('hidden');
-      document.getElementById('registerPage').classList.add('hidden');
-      document.getElementById('appLayout').classList.add('hidden');
-      document.getElementById(pageId).classList.remove('hidden');
-    }
-
-    function showSection(sectionId) {
-      document.getElementById('dashboard').classList.add('hidden');
-      document.getElementById('cloudflare').classList.add('hidden');
-      document.getElementById(sectionId).classList.remove('hidden');
-    }
+        function showSection(sectionId) {
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('cloudflare').classList.add('hidden');
+            document.getElementById(sectionId).classList.remove('hidden');
+        }
 
 
-  </script>
+    </script>
 
 </body>
+
 </html>
