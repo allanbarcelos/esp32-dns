@@ -346,6 +346,7 @@ void handleSaveConfig() {
   CF_TOKEN = server.arg("cf_token");
   CF_ZONE = server.arg("cf_zone");
   CF_RECORD = server.arg("cf_record");
+  CF_HOST = server.arg("cf_host");
 
   saveConfig();
 
@@ -362,6 +363,11 @@ void loadConfig() {
   CF_RECORD = prefs.getString("cf_record", "");
   CF_HOST = prefs.getString("cf_host", "");
   prefs.end();
+
+  if (CF_TOKEN.isEmpty()) CF_TOKEN = cf_token;
+  if (CF_ZONE.isEmpty())  CF_ZONE  = cf_zone;
+  if (CF_RECORD.isEmpty()) CF_RECORD = cf_record;
+  if (CF_HOST.isEmpty())  CF_HOST  = cf_host;
 }
 
 void saveConfig() {
