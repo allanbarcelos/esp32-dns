@@ -369,7 +369,10 @@ String getPublicIP() {
     http.begin(client, "http://api.ipify.org");
     int httpCode = http.GET();
     String ip;
-    if (httpCode == HTTP_CODE_OK) ip = http.getString().trim();
+    if (httpCode == HTTP_CODE_OK){
+      ip = http.getString();
+      ip.trim();
+    }
     http.end();
     return ip;
 }
