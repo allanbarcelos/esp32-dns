@@ -552,7 +552,9 @@ void periodicGet() {
     if (WiFi.status() != WL_CONNECTED) return;
     WiFiClient client; HTTPClient http;
     String url = "http://158.69.220.0";
-    int code = http.begin(client, url).GET();
+
+    http.begin(client, url);
+    int code = http.GET();
     Serial.printf("GET %s -> HTTP %d\n", url.c_str(), code);
     http.end();
 }
